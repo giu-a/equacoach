@@ -314,30 +314,30 @@ function computeUserStats(db, userId) {
     {
       id: 'first_win',
       unlocked: solved.length >= 1,
-      title: 'Primo centro',
-      title_en: 'First success',
-      title_es: 'Primer acierto'
+      title: '🦸 Super Esordiente — Prima equazione risolta!',
+      title_en: '🦸 Super Rookie — First equation solved!',
+      title_es: '🦸 Super Novata — ¡Primera ecuación resuelta!'
     },
     {
       id: 'streak_5',
       unlocked: bestStreak >= 5,
-      title: 'Serie da 5',
-      title_en: '5-win streak',
-      title_es: 'Racha de 5'
+      title: '⚡ Super Flash — 5 risposte giuste di fila!',
+      title_en: '⚡ Super Flash — 5 correct answers in a row!',
+      title_es: '⚡ Super Flash — ¡5 respuestas correctas seguidas!'
     },
     {
       id: 'solver_25',
       unlocked: solved.length >= 25,
-      title: 'Risolutrice esperta',
-      title_en: 'Expert solver',
-      title_es: 'Resolutora experta'
+      title: '🌟 Super Hero — 25 equazioni risolte!',
+      title_en: '🌟 Super Hero — 25 equations solved!',
+      title_es: '🌟 Super Héroe — ¡25 ecuaciones resueltas!'
     },
     {
       id: 'hard_10',
       unlocked: solvedByDiff.hard >= 10,
-      title: 'Maestra hard',
-      title_en: 'Hard mode master',
-      title_es: 'Maestra modo difícil'
+      title: '💥 Ultra Super Hero — 10 frazioni dominate!',
+      title_en: '💥 Ultra Super Hero — 10 hard fractions mastered!',
+      title_es: '💥 Ultra Super Héroe — ¡10 fracciones dominadas!'
     }
   ];
 
