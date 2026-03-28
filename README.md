@@ -2,6 +2,15 @@
 
 Webapp educativa responsive (stile iOS-like) per aiutare una ragazza di 13 anni a esercitarsi con le equazioni di primo grado.
 
+## Link
+
+- **Repository GitHub:** https://github.com/giu-a/equacoach
+- **Deploy one-click su Render:** [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/giu-a/equacoach)
+
+> Clicca il pulsante sopra → accedi/crea account gratuito su Render → il deploy parte automaticamente dal repo GitHub con `render.yaml`.
+
+---
+
 ## Funzionalita richieste coperte
 
 1. Identificazione utente con profilo:
