@@ -63,33 +63,90 @@ async function sendVerificationEmail(email, code) {
   return { delivered: true };
 }
 
-function parseEquation(equation) {
+// ─── Numeri razionali ────────────────────────────────────────────────────────
+function gcd(a, b) {
+  a = Math.abs(Math.round(a)); b = Math.abs(Math.round(b));
+  while (b) { [a, b] = [b, a % b]; }
+  return a || 1;
+}
+function lcm(a, b) { return (a * b) / gcd(a, b); }
+function rat(n, d = 1) {
+  n = Math.round(n); d = Math.round(d);
+  if (d === 0) return { n: 0, d: 1 };
+  if (d < 0) { n = -n; d = -d; }
+  const g = gcd(Math.abs(n), d);
+  return { n: n / g, d: d / g };
+}
+function ratAdd(a, b) { return rat(a.n * b.d + b.n * a.d, a.d * b.d); }
+function ratSub(a, b) { return rat(a.n * b.d - b.n * a.d, a.d * b.d); }
+function ratMul(a, b) { return rat(a.n * b.n, a.d * b.d); }
+function ratDiv(a, b) { if (b.n === 0) return null; return rat(a.n * b.d, a.d * b.n); }
+function ratStr(r) { return r.d === 1 ? String(r.n) : `${r.n}/${r.d}`; }
+function ratToFloat(r) { return r.n / r.d; }
+
+// ─── Parser robusto (supporta frazioni ax/b) ─────────────────────────────────
+function parseSideRobust(expr) {
+  expr = expr.replace(/\s+/g, '');
+  if (expr[0] !== '-') expr = '+' + expr;
+  const tokenRegex = /([+-])(\d*)(?:(x)(?:\/(\d+))?\/?(\d+)?|(\/(\d+)))?/g;
+  // Simplified tokenizer: match each signed term
+  const termRegex = /([+-])(\d+)?(x)?(?:\/(\d+))?/g;
+  let xCoeff = rat(0);
+  let constant = rat(0);
+  let m;
+  // Reset and re-tokenize
+  const clean = expr;
+  // Use a manual walk instead of unreliable regex backtracking
+  let i = 0;
+  while (i < clean.length) {
+    if (clean[i] !== '+' && clean[i] !== '-') { i++; continue; }
+    const sign = clean[i] === '-' ? -1 : 1;
+    i++;
+    let numStr = '';
+    while (i < clean.length && /\d/.test(clean[i])) { numStr += clean[i++]; }
+    const hasX = clean[i] === 'x';
+    if (hasX) i++;
+    let xDen = 1;
+    if (clean[i] === '/') {
+      i++;
+      let denStr = '';
+      while (i < clean.length && /\d/.test(clean[i])) { denStr += clean[i++]; }
+      xDen = denStr ? Number(denStr) : 1;
+    }
+    if (hasX) {
+      const num = numStr ? Number(numStr) : 1;
+      xCoeff = ratAdd(xCoeff, rat(sign * num, xDen));
+    } else if (numStr) {
+      const num = Number(numStr);
+      // xDen here is actually a constant denominator (e.g. +3/2 constant)
+      constant = ratAdd(constant, rat(sign * num, xDen));
+    }
+  }
+  return { xR: xCoeff, cR: constant };
+}
+
+function parseEquationRobust(equation) {
   const normalized = equation.replace(/\s+/g, '');
-  const parts = normalized.split('=');
-  if (parts.length !== 2) return null;
-
-  const [left, right] = parts;
-  const leftMatch = left.match(/^([+-]?\d*)x([+-]\d+)?$/);
-  const rightMatch = right.match(/^([+-]?\d*)x([+-]\d+)?$/);
-  if (!leftMatch || !rightMatch) return null;
-
-  const lx = coefficientFromStr(leftMatch[1]);
-  const lc = constantFromStr(leftMatch[2]);
-  const rx = coefficientFromStr(rightMatch[1]);
-  const rc = constantFromStr(rightMatch[2]);
-
-  return { lx, lc, rx, rc };
+  const eqIdx = normalized.indexOf('=');
+  if (eqIdx < 0) return null;
+  const left = parseSideRobust(normalized.slice(0, eqIdx));
+  const right = parseSideRobust(normalized.slice(eqIdx + 1));
+  if (!left || !right) return null;
+  return {
+    lx: ratToFloat(left.xR), lc: ratToFloat(left.cR),
+    rx: ratToFloat(right.xR), rc: ratToFloat(right.cR),
+    lxR: left.xR, lcR: left.cR, rxR: right.xR, rcR: right.cR
+  };
 }
 
-function coefficientFromStr(value) {
-  if (value === '' || value === '+') return 1;
-  if (value === '-') return -1;
-  return Number(value);
-}
-
-function constantFromStr(value) {
-  if (!value) return 0;
-  return Number(value);
+function parseUserAnswer(str) {
+  str = String(str || '').replace(',', '.').trim();
+  if (str.includes('/')) {
+    const [num, den] = str.split('/').map((s) => Number(s.trim()));
+    if (!Number.isFinite(num) || !Number.isFinite(den) || den === 0) return NaN;
+    return num / den;
+  }
+  return Number(str);
 }
 
 function solveParsed(parsed) {
@@ -103,30 +160,84 @@ function evaluateSide(coeffX, constant, xValue) {
   return coeffX * xValue + constant;
 }
 
+// ─── Formattazione display termini razionali ─────────────────────────────────
+function formatXTermR(r) {
+  if (r.n === 0) return null;
+  const sign = r.n < 0 ? '-' : '';
+  const absN = Math.abs(r.n);
+  if (r.d === 1) { return absN === 1 ? `${sign}x` : `${sign}${absN}x`; }
+  return absN === 1 ? `${sign}x/${r.d}` : `${sign}${absN}x/${r.d}`;
+}
+function formatConstR(r) {
+  if (r.n === 0) return null;
+  return r.d === 1 ? String(r.n) : `${r.n}/${r.d}`;
+}
+function formatSideR(xR, cR) {
+  const xPart = formatXTermR(xR);
+  const cPart = formatConstR(cR);
+  if (!xPart && cPart === null) return '0';
+  if (!xPart) return cPart;
+  if (cPart === null) return xPart;
+  const cVal = ratToFloat(cR);
+  if (cVal > 0) return `${xPart} + ${cPart}`;
+  return `${xPart} - ${formatConstR(rat(-cR.n, cR.d))}`;
+}
+
 function generateEquation(difficulty) {
+  if (difficulty === 'hard') return generateHardEquation();
+
   const levels = {
     easy: { coeffMin: 1, coeffMax: 6, constMin: -12, constMax: 12 },
-    medium: { coeffMin: 2, coeffMax: 10, constMin: -20, constMax: 20 },
-    hard: { coeffMin: 3, coeffMax: 16, constMin: -40, constMax: 40 }
+    medium: { coeffMin: 2, coeffMax: 10, constMin: -20, constMax: 20 }
   };
-
   const cfg = levels[difficulty] || levels.easy;
 
   while (true) {
     const lx = randomNonZero(cfg.coeffMin, cfg.coeffMax);
     const rx = randomNonZero(cfg.coeffMin, cfg.coeffMax);
     if (lx === rx) continue;
-
     const lc = randomInt(cfg.constMin, cfg.constMax);
     const rc = randomInt(cfg.constMin, cfg.constMax);
-
     const x = (rc - lc) / (lx - rx);
-
     if (!Number.isFinite(x)) continue;
     if (Math.abs(x) > 100) continue;
-
     const equation = `${formatCoeff(lx)}x${formatConst(lc)} = ${formatCoeff(rx)}x${formatConst(rc)}`;
     return { equation, solution: x };
+  }
+}
+
+function generateHardEquation() {
+  const denoms = [2, 3, 4, 6];
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  while (true) {
+    const b = pick(denoms);
+    const f = pick(denoms);
+    const a = randomNonZero(1, 5);
+    const e = randomNonZero(1, 5);
+
+    const lxR = rat(a, b);
+    const rxR = rat(e, f);
+    // verifica lx != rx
+    if (lxR.n * rxR.d === rxR.n * lxR.d) continue;
+
+    const lc = randomInt(-8, 8);
+    const rc = randomInt(-8, 8);
+    const lcR = rat(lc);
+    const rcR = rat(rc);
+
+    const diffX = ratSub(lxR, rxR);
+    const diffC = ratSub(rcR, lcR);
+    const xSol = ratDiv(diffC, diffX);
+    if (!xSol) continue;
+    const xFloat = ratToFloat(xSol);
+    if (!Number.isFinite(xFloat)) continue;
+    if (Math.abs(xFloat) > 30) continue;
+
+    const lxDisp = formatXTermR(lxR) || '0';
+    const rxDisp = formatXTermR(rxR) || '0';
+    const equation = `${lxDisp}${formatConst(lc)} = ${rxDisp}${formatConst(rc)}`;
+    return { equation, solution: xFloat, type: 'hard' };
   }
 }
 
@@ -242,23 +353,54 @@ function computeUserStats(db, userId) {
 }
 
 function buildStepByStep(parsed) {
-  const a = parsed.lx - parsed.rx;
-  const b = parsed.rc - parsed.lc;
+  // Usa campi razionali se disponibili (da parseEquationRobust), altrimenti ricava
+  const lxR = parsed.lxR || rat(parsed.lx);
+  const lcR = parsed.lcR || rat(parsed.lc);
+  const rxR = parsed.rxR || rat(parsed.rx);
+  const rcR = parsed.rcR || rat(parsed.rc);
 
-  return [
-    `Partenza: ${formatLinear(parsed.lx, parsed.lc)} = ${formatLinear(parsed.rx, parsed.rc)}`,
-    `Porto i termini con x a sinistra e i termini noti a destra: (${parsed.lx} - ${parsed.rx})x = ${parsed.rc} - (${parsed.lc})`,
-    `Ottengo: ${a}x = ${b}`,
-    `Divido entrambi i membri per ${a}: x = ${b} / ${a}`,
-    `Risultato: x = ${trimFloat(b / a)}`
-  ];
-}
+  const leftSide = formatSideR(lxR, lcR);
+  const rightSide = formatSideR(rxR, rcR);
+  const steps = [];
+  steps.push(`Partenza: ${leftSide} = ${rightSide}`);
 
-function formatLinear(coeff, constant) {
-  const left = `${coeff === 1 ? '' : coeff === -1 ? '-' : coeff}x`;
-  if (constant > 0) return `${left} + ${constant}`;
-  if (constant < 0) return `${left} - ${Math.abs(constant)}`;
-  return left;
+  const hasFractions = [lxR, lcR, rxR, rcR].some((r) => r.d > 1);
+  let wLx = lxR, wLc = lcR, wRx = rxR, wRc = rcR;
+
+  if (hasFractions) {
+    const allDens = [lxR.d, lcR.d, rxR.d, rcR.d];
+    const LCD = allDens.reduce((acc, d) => lcm(acc, d), 1);
+    const uniqueDens = [...new Set(allDens.filter((d) => d > 1))].join(', ');
+    steps.push(`Individuazione del Minimo Comune Multiplo (MCM) tra i denominatori ${uniqueDens}: MCM = ${LCD}`);
+    steps.push(`Moltiplico tutti i termini per ${LCD} per eliminare le frazioni:`);
+    const lcdR = rat(LCD);
+    wLx = ratMul(lxR, lcdR); wLc = ratMul(lcR, lcdR);
+    wRx = ratMul(rxR, lcdR); wRc = ratMul(rcR, lcdR);
+    steps.push(`${formatSideR(wLx, wLc)} = ${formatSideR(wRx, wRc)}`);
+  }
+
+  const a = ratSub(wLx, wRx); // coefficiente: lx - rx
+  const b = ratSub(wRc, wLc); // costante: rc - lc
+
+  steps.push(`Porto i termini con x a sinistra e i termini noti a destra:`);
+  steps.push(`(${ratStr(wLx)} - ${ratStr(wRx)})x = ${ratStr(wRc)} - (${ratStr(wLc)})`);
+  steps.push(`${ratStr(a)}x = ${ratStr(b)}`);
+
+  const xSol = ratDiv(b, a);
+  if (!xSol) {
+    steps.push('Equazione impossibile o indeterminata.');
+    return steps;
+  }
+
+  steps.push(`Divido entrambi i membri per ${ratStr(a)}:`);
+  const xFloat = ratToFloat(xSol);
+  if (xSol.d > 1) {
+    steps.push(`x = ${ratStr(b)} ÷ ${ratStr(a)} = ${ratStr(xSol)} ≈ ${trimFloat(xFloat)}`);
+  } else {
+    steps.push(`x = ${ratStr(b)} ÷ ${ratStr(a)} = ${ratStr(xSol)}`);
+  }
+  steps.push(`✅ Risultato: x = ${ratStr(xSol)}`);
+  return steps;
 }
 
 function trimFloat(value) {
@@ -431,20 +573,26 @@ app.post('/api/equation/new', auth, (req, res) => {
 app.post('/api/equation/check', auth, (req, res) => {
   const { equation, userAnswer, difficulty } = req.body;
 
-  const parsed = parseEquation(String(equation || ''));
+  const parsed = parseEquationRobust(String(equation || ''));
   if (!parsed) return res.status(400).json({ error: 'invalid_equation_format' });
 
   const expected = solveParsed(parsed);
   if (expected === null) return res.status(400).json({ error: 'no_single_solution' });
 
-  const answerNum = Number(String(userAnswer).replace(',', '.'));
+  const answerNum = parseUserAnswer(userAnswer);
   if (!Number.isFinite(answerNum)) return res.status(400).json({ error: 'invalid_answer' });
 
   const leftValue = evaluateSide(parsed.lx, parsed.lc, answerNum);
   const rightValue = evaluateSide(parsed.rx, parsed.rc, answerNum);
 
-  const equal = Math.abs(leftValue - rightValue) < 1e-9;
-  const correct = Math.abs(answerNum - expected) < 1e-9;
+  const equal = Math.abs(leftValue - rightValue) < 1e-6;
+  const correct = Math.abs(answerNum - expected) < 1e-6;
+
+  // Calcola soluzione in forma razionale per display
+  const diffX = ratSub(parsed.lxR, parsed.rxR);
+  const diffC = ratSub(parsed.rcR, parsed.lcR);
+  const xSolR = ratDiv(diffC, diffX);
+  const expectedStr = xSolR ? ratStr(xSolR) : trimFloat(expected);
 
   req.db.attempts.push({
     id: uuidv4(),
@@ -466,6 +614,7 @@ app.post('/api/equation/check', auth, (req, res) => {
   return res.json({
     correct,
     expectedAnswer: expected,
+    expectedAnswerStr: expectedStr,
     verification: {
       leftValue,
       rightValue,
@@ -477,7 +626,7 @@ app.post('/api/equation/check', auth, (req, res) => {
 
 app.post('/api/equation/steps', auth, (req, res) => {
   const { equation } = req.body;
-  const parsed = parseEquation(String(equation || ''));
+  const parsed = parseEquationRobust(String(equation || ''));
   if (!parsed) return res.status(400).json({ error: 'invalid_equation_format' });
 
   const steps = buildStepByStep(parsed);

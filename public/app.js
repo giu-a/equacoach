@@ -58,7 +58,9 @@ const t = {
     statStreak: 'Miglior serie',
     loading: 'Caricamento...',
     needEquation: 'Genera prima una nuova equazione.',
-    needAnswer: 'Inserisci una risposta numerica.',
+    needAnswer: 'Inserisci una risposta numerica (es: 3, -2, 3/2).',
+    answerHint: 'x = (es: 3, -2, 3/2)',
+    hardDesc: 'Frazioni, cambi di segno, soluzioni non intere',
     authRequired: 'Effettua accesso.',
     mailDevCode: 'Modalita sviluppo: codice',
     profileSaved: 'Profilo aggiornato.'
@@ -112,7 +114,9 @@ const t = {
     statStreak: 'Best streak',
     loading: 'Loading...',
     needEquation: 'Generate an equation first.',
-    needAnswer: 'Enter a numeric answer.',
+    needAnswer: 'Enter a numeric answer (e.g. 3, -2, 3/2).',
+    answerHint: 'x = (e.g. 3, -2, 3/2)',
+    hardDesc: 'Fractions, sign changes, non-integer solutions',
     authRequired: 'Please log in.',
     mailDevCode: 'Dev mode: code',
     profileSaved: 'Profile updated.'
@@ -166,7 +170,9 @@ const t = {
     statStreak: 'Mejor racha',
     loading: 'Cargando...',
     needEquation: 'Primero genera una ecuacion.',
-    needAnswer: 'Introduce una respuesta numerica.',
+    needAnswer: 'Introduce una respuesta numerica (ej: 3, -2, 3/2).',
+    answerHint: 'x = (ej: 3, -2, 3/2)',
+    hardDesc: 'Fracciones, cambios de signo, soluciones no enteras',
     authRequired: 'Debes iniciar sesion.',
     mailDevCode: 'Modo desarrollo: codigo',
     profileSaved: 'Perfil actualizado.'
@@ -451,11 +457,17 @@ $('answerForm').addEventListener('submit', async (e) => {
     const vb = $('verificationBlock');
     vb.classList.remove('hidden');
 
+    const solStr = out.expectedAnswerStr || trimNum(out.expectedAnswer);
+    const solDisplay = solStr !== trimNum(out.expectedAnswer) ? `${solStr} (${trimNum(out.expectedAnswer)})` : solStr;
+    const colorStyle = out.correct ? 'color:var(--ok)' : 'color:var(--err)';
     vb.innerHTML = `
-      <p><strong>${out.correct ? tr('correct') : tr('incorrect')}</strong></p>
-      <p>${tr('verificationMath')}: ${tr('left')} = ${trimNum(out.verification.leftValue)} | ${tr('right')} = ${trimNum(out.verification.rightValue)}</p>
-      <p>${out.verification.equal ? tr('equalYes') : tr('equalNo')}</p>
-      <p>${tr('expected')}: ${trimNum(out.expectedAnswer)}</p>
+      <p style="${colorStyle}"><strong>${out.correct ? '\u2705 ' + tr('correct') : '\u274c ' + tr('incorrect')}</strong></p>
+      <p>${tr('verificationMath')}:<br>
+        ${tr('left')}: ${trimNum(out.verification.leftValue)}<br>
+        ${tr('right')}: ${trimNum(out.verification.rightValue)}<br>
+        ${out.verification.equal ? '\u2714\ufe0f ' + tr('equalYes') : '\u274c ' + tr('equalNo')}
+      </p>
+      <p>${tr('expected')}: <strong>${escapeHtml(solDisplay)}</strong></p>
     `;
 
     $('showSteps').classList.toggle('hidden', !state.canShowSteps);
